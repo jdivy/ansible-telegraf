@@ -24,7 +24,6 @@
   win_unzip:
     src: '{{ telegraf_win_install_dir }}\telegraf-{{ telegraf_agent_version }}_windows_amd64.zip'
     dest: "{{ telegraf_win_install_dir }}"
-    creates: '{{ telegraf_win_install_dir }}\telegraf\telegraf.exe'
 
 - name: "Windows | Configure Telegraf"
   win_template:

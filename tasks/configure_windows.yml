@@ -20,11 +20,16 @@
   when:
     - not file_info.stat.exists
 
+- name: "Windows | Stop service"
+  win_service:
+    name: Telegraf
+    state: stopped
+  ignore_errors: yes
+    
 - name: "Windows | Unzip file"
   win_unzip:
     src: '{{ telegraf_win_install_dir }}\telegraf-{{ telegraf_agent_version }}_windows_amd64.zip'
     dest: "{{ telegraf_win_install_dir }}"
-    creates: '{{ telegraf_win_install_dir }}\telegraf\telegraf.exe'
 
 - name: "Windows | Configure Telegraf"
   win_template:

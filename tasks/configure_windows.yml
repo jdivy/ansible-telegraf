@@ -20,64 +20,73 @@
   when:
     - not file_info.stat.exists
 
-- name: "Windows | Stop service"
-  win_service:
-    name: Telegraf
-    state: stopped
-  ignore_errors: yes
+- name: "Windows | Attempt upgrade"
+  block:
+    - name: "Windows | Stop service"
+      win_service:
+        name: Telegraf
+        state: stopped
+      ignore_errors: yes
+
+    - name: "Windows | Unzip file"
+      win_unzip:
+        src: '{{ telegraf_win_install_dir }}\telegraf-{{ telegraf_agent_version }}_windows_amd64.zip'
+        dest: "{{ telegraf_win_install_dir }}"
     
-- name: "Windows | Unzip file"
-  win_unzip:
-    src: '{{ telegraf_win_install_dir }}\telegraf-{{ telegraf_agent_version }}_windows_amd64.zip'
-    dest: "{{ telegraf_win_install_dir }}"
+    - name: "Windows | Configure Telegraf"
+      win_template:
+        src: telegraf.conf.j2
+        dest: '{{ telegraf_win_install_dir }}\telegraf\telegraf.conf'
+      notify: "Restart Windows Telegraf"
+      
+    - name: "Windows | Copy telegraf extra plugins"
+      win_template:
+        src: "telegraf-extra-plugin.conf.j2"
+        dest: '{{ telegraf_win_include }}\{{ item.key }}.conf'
+      with_dict: "{{ telegraf_plugins_extra }}"
+      loop_control:
+        label: "{{ item.key }}"
+      when:
+        - telegraf_plugins_extra is defined
+        - telegraf_plugins_extra is iterable
+        - item.value.state|default('present') != 'absent'
+      notify: "Restart Windows Telegraf"
+    
+    - name: "Windows | Remove telegraf extra plugins"
+      win_file:
+        path: '{{ telegraf_win_include }}\{{ item.key }}.conf'
+        state: absent
+      with_dict: "{{ telegraf_plugins_extra }}"
+      loop_control:
+        label: "{{ item.key }}"
+      when:
+        - telegraf_plugins_extra is defined
+        - telegraf_plugins_extra is iterable
+        - item.value.state|default('present') == 'absent'
+      notify: "Restart Windows Telegraf"
 
-- name: "Windows | Configure Telegraf"
-  win_template:
-    src: telegraf.conf.j2
-    dest: '{{ telegraf_win_install_dir }}\telegraf\telegraf.conf'
-  notify: "Restart Windows Telegraf"
+    - name: "Windows | Register Service"
+      win_command: '{{ telegraf_win_install_dir }}\telegraf\telegraf.exe {{ telegraf_win_service_args | join(" ") }}'
+      register: telegraf_windows_install
+      args:
+        creates: '{{ telegraf_win_install_dir }}\.installed'
+    
+    - name: "Windows | Create done file so it won't register itself again"
+      win_file:
+        path: '{{ telegraf_win_install_dir }}\.installed'
+        state: touch
+      when:
+        - telegraf_windows_install is changed
+    
+    - name: "Windows | Set service startup mode to auto and ensure it is started"
+      win_service:
+        name: Telegraf
+        start_mode: auto
+        state: started
+  rescue:
+    - name: "Restart existing service if necessary"
+      win_service:
+        name: Telegraf
+        state: started
+      ignore_errors: yes
 
-- name: "Windows | Copy telegraf extra plugins"
-  win_template:
-    src: "telegraf-extra-plugin.conf.j2"
-    dest: '{{ telegraf_win_include }}\{{ item.key }}.conf'
-  with_dict: "{{ telegraf_plugins_extra }}"
-  loop_control:
-    label: "{{ item.key }}"
-  when:
-    - telegraf_plugins_extra is defined
-    - telegraf_plugins_extra is iterable
-    - item.value.state|default('present') != 'absent'
-  notify: "Restart Windows Telegraf"
-
-- name: "Windows | Remove telegraf extra plugins"
-  win_file:
-    path: '{{ telegraf_win_include }}\{{ item.key }}.conf'
-    state: absent
-  with_dict: "{{ telegraf_plugins_extra }}"
-  loop_control:
-    label: "{{ item.key }}"
-  when:
-    - telegraf_plugins_extra is defined
-    - telegraf_plugins_extra is iterable
-    - item.value.state|default('present') == 'absent'
-  notify: "Restart Windows Telegraf"
-
-- name: "Windows | Register Service"
-  win_command: '{{ telegraf_win_install_dir }}\telegraf\telegraf.exe {{ telegraf_win_service_args | join(" ") }}'
-  register: telegraf_windows_install
-  args:
-    creates: '{{ telegraf_win_install_dir }}\.installed'
-
-- name: "Windows | Create done file so it won't register itself again"
-  win_file:
-    path: '{{ telegraf_win_install_dir }}\.installed'
-    state: touch
-  when:
-    - telegraf_windows_install is changed
-
-- name: "Windows | Set service startup mode to auto and ensure it is started"
-  win_service:
-    name: Telegraf
-    start_mode: auto
-    state: started

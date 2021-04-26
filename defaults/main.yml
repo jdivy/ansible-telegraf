@@ -1,4 +1,5 @@
 ---
+telegraf_enabled: True
 # defaults file for ansible-telegraf
 
 telegraf_agent_version: 1.10.0
@@ -26,6 +27,7 @@ telegraf_agent_docker: False
 telegraf_agent_docker_name: telegraf
 telegraf_agent_docker_network_mode: bridge
 telegraf_agent_docker_restart_policy: unless-stopped
+telegraf_agent_docker_image_version: "{{ telegraf_agent_version }}"
 
 # v0.13 settings (not sure if supported in older version):
 telegraf_agent_collection_jitter: 0
@@ -73,11 +75,15 @@ telegraf_yum_baseurl:
   centos: "https://repos.influxdata.com/rhel/{{ telegraf_redhat_releasever }}/$basearch/stable"
   default: "https://repos.influxdata.com/{{ ansible_distribution|lower }}/{{ telegraf_redhat_releasever }}/$basearch/stable"
   redhat: "https://repos.influxdata.com/rhel/{{ telegraf_redhat_releasever }}/$basearch/stable"
+telegraf_yum_gpgkey: "https://repos.influxdata.com/influxdb.key"
 
 telegraf_win_install_dir: 'C:\Telegraf'
 telegraf_win_logfile: 'C:\\Telegraf\\telegraf.log'
 telegraf_win_include: 'C:\Telegraf\telegraf_agent.d'
 telegraf_win_service_args:
   - -service install
-  - -config {{ telegraf_win_install_dir }}\telegraf\telegraf.conf
-  - --config-directory {{ telegraf_win_include }}
+  - '-config "{{ telegraf_win_install_dir }}\telegraf.conf"'
+  - '--config-directory "{{ telegraf_win_include }}"'
+
+telegraf_mac_user: user
+telegraf_mac_group: admin

@@ -22,16 +22,17 @@
       - [Example Docker configuration](#example-docker-configuration)
   * [Windows specific Variables](#windows-specific-variables)
   * [Extra information](#extra-information-1)
+    + [telegraf_plugins_default](#telegraf-plugins-default)
+    + [telegraf_plugins_extra](#telegraf-plugins-extra)
   * [Dependencies](#dependencies)
   * [Example Playbook](#example-playbook)
-  * [Contributors](#contributors)
   * [Molecule](#molecule)
   * [License](#license)
   * [Author Information](#author-information)
 
 ## Build status:
 
-[![Build Status](https://travis-ci.org/dj-wasabi/ansible-telegraf.svg?branch=master)](https://travis-ci.org/dj-wasabi/ansible-telegraf) <img src="https://img.shields.io/ansible/role/d/5173"/> <img src="https://img.shields.io/ansible/quality/5173"/>
+[![Build Status](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Factions-badge.atrox.dev%2Fdj-wasabi%2Fansible-telegraf%2Fbadge%3Fref%3Dmaster&style=flat)](https://actions-badge.atrox.dev/dj-wasabi/ansible-telegraf/goto?ref=master) <img src="https://img.shields.io/ansible/role/d/5173"/> <img src="https://img.shields.io/ansible/quality/5173"/>
 
 This role will install and configure telegraf.
 
@@ -84,15 +85,16 @@ There was an issue:
 
 Specifying the version to be installed:
 
-* `telegraf_agent_version`: The version of Telegraf to install. Default: `1.10.0`
+* `telegraf_agent_version`: The version of Telegraf to install. If `telegraf_agent_package_state` is set to `latest`, then this property and value is ignored. Default: `1.10.0`
 
-How `Telegraf` needs to be installed. There are 3 methods in getting `Telegraf` installed on the target host:
+How `Telegraf` needs to be installed. There are 4 methods in getting `Telegraf` installed on the target host:
 
 * Via the package manager, like `yum`, `apt` or `zypper` ("repo");
 * Via a download from the `https://dl.influxdata.com/` site ("online");
 * Already provided and is already available on the target host, but not yet installed/configured ("offline");
+* Already installed on the target host or done manually, but not yet configured ("manual");
 
-This can be configured by setting `telegraf_agent_package_method` to one of the appropriate values ( `repo`, `online` or `offline`).
+This can be configured by setting `telegraf_agent_package_method` to one of the appropriate values ( `repo`, `online`, `offline` or `manual`).
 
 #### Telegraf Package
 
@@ -116,6 +118,7 @@ These properties set in how and what package will be installed.
 * `telegraf_agent_metric_buffer_limit`: The agent metric buffer limit. Default: 10000  (since v0.13)
 * `telegraf_agent_quiet`: Run Telegraf in quiet mode (error messages only). Default: `False` (since v0.13)
 * `telegraf_agent_logfile`: The agent logfile name. Default: '' (means to log to stdout) (since v1.1)
+* `telegraf_agent_hostname`: The agent hostname.  Default: `ansible_fqdn`
 * `telegraf_agent_omit_hostname`: Do no set the "host" tag in the agent. Default: `False` (since v1.1)
 
 ### Docker specific role variables:
@@ -124,6 +127,7 @@ These properties set in how and what package will be installed.
 * `telegraf_agent_docker_name`: Name of the docker container. Default: `telegraf`
 * `telegraf_agent_docker_network_mode`: Networking mode of the docker container. Default: `bridge`
 * `telegraf_agent_docker_restart_policy`: Docker container restart policy. Default: `unless-stopped`
+* `telegraf_agent_docker_image_version`: The version of the Docker Telegraf image to be used. Default the value contains the value given for `telegraf_agent_version`. Can be set to `latest` to get the actual `latest` tag for the provided Docker image.
 * `telegraf_uid_docker`: Override user id. Default: `995`
 * `telegraf_gid_docker`: Override group id. Default: `998`
 
@@ -202,10 +206,8 @@ More information: [https://github.com/influxdata/telegraf/blob/master/docs/FAQ.m
 	telegraf_plugins_default:
 	  - plugin: cpu
 	    config:
-	      - percpu = "true"
+	      - percpu = true
 	  - plugin: disk
-	    tags:
-	      - diskmetrics = "true"
 	    tagpass:
 	      - fstype = [ "ext4", "xfs" ]
 	    tagdrop:
@@ -231,12 +233,22 @@ _Supporting Windows is an best effort (I don't have the possibility to either te
 * `telegraf_win_logfile`: The location to the logfile of Telegraf.
 * `telegraf_win_include`: The directory that will contain all plugin configuration.
 
+## MacOS specific Variables
+
+**NOTE**
+
+_MacOS support is as the Window Support an best effort and not officially supported._
+
+* `telegraf_mac_user`:  Telegraf will run as this user (needed as running things as other users using brew is problematic)
+
 ## Extra information
 
 There are two properties which are similar, but are used differently. Those are:
 
 * `telegraf_plugins_default`
 * `telegraf_plugins_extra`
+
+### telegraf_plugins_default
 
 With the property `telegraf_plugins_default` it is set to use the default set of Telegraf plugins. You could override it with more plugins, which should be enabled at default.
 
@@ -253,13 +265,15 @@ With the property `telegraf_plugins_default` it is set to use the default set of
 
 Every telegraf agent has these as a default configuration.
 
+### telegraf_plugins_extra
+
 The 2nd parameter `telegraf_plugins_extra` can be used to add plugins specific to the servers goal. It is a hash instead of a list, so that you can merge values from multiple var files together. Following is an example for using this parameter for MySQL database servers:
 
 	cat group_vars/mysql_database
 	telegraf_plugins_extra:
-		mysql:
-		  config:
-		  	- servers = ["root:{{ mysql_root_password }}@tcp(localhost:3306)/"]
+	  mysql:
+	    config:
+	      - servers = ["root:{{ mysql_root_password }}@tcp(localhost:3306)/"]
 
 There is an option to delete extra-plugin files in /etc/telegraf/telegraf.d if they weren't generated by this playbook with `telegraf_plugins_extra_exclusive` variable.
 
@@ -269,6 +283,8 @@ Telegraf plugin options:
 * `tagpass`: (added in Telegraf 0.1.5) tag names and arrays of strings that are used to filter metrics by the current plugin. Each string in the array is tested as an exact match against the tag name, and if it matches the metric is emitted.
 * `tagdrop`: (added in Telegraf 0.1.5) The inverse of tagpass. If a tag matches, the metric is not emitted. This is tested on metrics that have passed the tagpass test.
 * `interval`: How often to gather this metric. Normal plugins use a single global interval, but if one particular plugin should be run less or more often, you can configure that here.
+* `filter.name`: Like when there is an extra filter that needs to be configured, like `grok` for a `logparser` plugin.
+* `filter.config`: The extra configuration for the - in the `filter.name` example - `grok` filter. (See example below)
 
 An example might look like this:
 
@@ -281,16 +297,29 @@ An example might look like this:
 	      - fstype = [ "ext4", "xfs" ]
     	  - path = [ "/opt", "/home" ]
 
-If you want to define processors you can simply use `telegraf_processors` variable.  
+If you want to define processors you can simply use `telegraf_processors` variable.
 An example might look like this:
 ```
-telegraf_processors: 
+telegraf_processors:
   - processor: rename
-  - processor: rename.replace  
+  - processor: rename.replace
     config:
         - tag = "level"
         - dest = "LogLevel"
 ```
+
+When you want to make use of the `grok` filter for the logparser:
+
+	telegraf_plugins_extra:
+		logparser:
+		plugin: logparser
+		config:
+			- files = ["/var/log/messages"]
+			- from_beginning = false
+		filter:
+			name: grok
+			config:
+			- patterns = ["invoked oom-killer"]
 
 ## Dependencies
 
@@ -301,39 +330,6 @@ No dependencies
     - hosts: servers
       roles:
          - { role: dj-wasabi.telegraf }
-
-## Contributors
-
-The following have contributed to this Ansible role (Provided with: `git shortlog -s -n`):
-
-* Werner Dijkerman
-* Thomas Szymanski
-* Jeroen Geusebroek
-* or
-* Alejandro
-* Troy Jendra
-* Slawomir Skowron
-* gaelL
-* Laurent Hoss
-* Ismael
-* Anthony ARNAUD
-* Ilkka Tengvall
-* Rick Box
-* Steven Wirges
-* Jack Ivy
-* Emerson Knapp
-* zend0
-* Angristan
-* Miroslav Prasil
-* Olivier Boukili
-* Pascal
-* Romain BUREAU
-* Ryan Conway
-* Steve Durrheimer
-* TheCodeAssassin
-* aroglian
-
-Thank you all!
 
 ## Molecule
 
